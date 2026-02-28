@@ -1,0 +1,69 @@
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Package managers
+uv.lock
+*.lock
+.uv/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Project specific
+logs/
+output/
+*.jsonl
+*.csv
+*.png
+*.jpg
+*.jpeg
+
+# WSI slides (large data files)
+*.svs
+*.ndpi
+*.tiff
+*.tif
+*.scn
+*.slide
+CMU-1.svs
+
+# OS specific
+Thumbs.db
+.DS_Store
+.env
+.env.local

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WSI Viewer</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.1/build/openseadragon/openseadragon.min.js"></script>
+</head>
+<body>
+    <div id="viewer-container">
+        <div id="openseadragon"></div>
+
+        <div id="hud">
+            <div id="hud-file">File: —</div>
+            <div id="hud-mag">Magnification: —</div>
+            <div id="hud-pos">Cursor WSI: (—, —)</div>
+            <div id="hud-level">DZ Level: —</div>
+            <div id="hud-vp">Viewport: —</div>
+            <div id="hud-gaze-mode">Gaze: all  [G to toggle]</div>
+            <div id="hud-ws" class="ws-off">WS: disconnected</div>
+        </div>
+
+        <canvas id="gaze-canvas"></canvas>
+
+        <div id="controls">
+            <span class="hint">Ctrl+Click → fixation target  |  G → gaze mode  |  C → clear dots</span>
+        </div>
+    </div>
+
+    <script src="/static/viewer.js"></script>
+</body>
+</html>

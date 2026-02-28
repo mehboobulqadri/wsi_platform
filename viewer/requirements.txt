@@ -1,0 +1,6 @@
+openslide-python>=1.2.0
+openslide-bin>=4.0.0
+fastapi>=0.68.0
+uvicorn>=0.15.0
+Pillow>=8.0.0
+websockets>=10.0
