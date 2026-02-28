@@ -37,6 +37,8 @@ uv.lock
 # IDE / Editor
 .vscode/
 .idea/
+.zencoder/
+.zenflow/
 *.swp
 *.swo
 *~
