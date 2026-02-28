@@ -127,6 +127,7 @@ python analyze_session.py ^
     C:\slides\CMU-1.svs ^
     --tile-size 512
 ```
+For Powershell use ` instead of ^ as the line continuation
 
 Outputs: `dwell_map.csv`, `heatmap.png`, `session_summary.txt`
 
