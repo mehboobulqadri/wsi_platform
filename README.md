@@ -4,8 +4,8 @@ A minimal research tool for viewing Whole Slide Images (WSI) and recording
 eye-tracking gaze data mapped to tissue coordinates. Built for pathology
 eye-tracking experiments.
 
-Supports simulated gaze (for development) and Tobii Pro eye trackers
-(for real experiments) through a swappable gaze source interface.
+Supports simulated gaze (for development and testing) and Tobii Pro eye
+trackers (for real experiments) through a swappable gaze source interface.
 
 ## Status
 
@@ -13,22 +13,21 @@ Supports simulated gaze (for development) and Tobii Pro eye trackers
 - [x] Phase 2 — WebSocket relay + click event forwarding
 - [x] Phase 3 — Gaze simulator (fixation-saccade model + Gaussian noise)
 - [x] Phase 4 — Per-tile dwell-time analysis + heatmap generation
-- [ ] Phase 5 — Tobii Pro eye tracker integration
+- [x] Phase 5 — Tobii Pro eye tracker integration
 
 ## Architecture
 
-Two standalone applications communicating over WebSocket:
-
 ```
-VIEWER (App 1)                    SIMULATOR / TRACKER (App 2)
+VIEWER (App 1)                    GAZE SOURCE (App 2)
 ─────────────────                 ──────────────────────────
-FastAPI tile server               Python gaze generator
-+ Browser UI (OpenSeadragon)      + GazeSource interface
-+ WebSocket hub                   │  ├─ SimulatedGazeSource
-+ Coordinate HUD                  │  └─ TobiiGazeSource (Phase 5)
-+ Gaze dot renderer               + JSONL session logging
-                    ◄── WS ──►
-                    port 8000
+FastAPI tile server               GazeSource interface
++ Browser UI (OpenSeadragon)      │  ├─ SimulatedGazeSource
++ WebSocket hub                   │  │   (Gaussian noise,
++ Coordinate HUD                  │  │    fixation-saccade model)
++ Gaze dot renderer               │  └─ TobiiGazeSource
+                                  │      (Tobii Pro SDK,
+                    ◄── WS ──►    │       screen→WSI mapping)
+                    port 8000     + JSONL session logging
 
                   ANALYZER (App 3)
                   ────────────────
@@ -38,16 +37,16 @@ FastAPI tile server               Python gaze generator
                   + Session summary
 ```
 
-**Key design principle:** The viewer knows nothing about gaze logic.
-It renders dots it receives over WebSocket. The simulator/tracker knows
-nothing about rendering. Swapping data sources requires changing one
-flag — zero viewer changes.
+**Key design:** The viewer renders dots it receives — it knows nothing about
+where they come from. The gaze source generates coordinates — it knows nothing
+about rendering. Swapping simulator for Tobii requires changing one CLI flag.
 
 ## Prerequisites
 
-- Python 3.9+
+- **Python 3.10+** (required for Tobii SDK; simulator-only works on 3.9+)
 - Windows (tested), macOS/Linux should work
 - [uv](https://github.com/astral-sh/uv) package manager (recommended) or pip
+- For Tobii: Tobii Pro Eye Tracker Manager installed, tracker calibrated
 
 ### Get a Test Slide
 
@@ -55,8 +54,7 @@ flag — zero viewer changes.
 curl -L -o CMU-1.svs https://openslide.cs.cmu.edu/download/openslide-testdata/Aperio/CMU-1.svs
 ```
 
-~280 MB Aperio SVS format. Supported formats: `.svs`, `.ndpi`, `.scn`,
-`.tiff` (pyramidal), `.mrxs`.
+~280 MB Aperio SVS format. Also supports: `.ndpi`, `.scn`, `.tiff`, `.mrxs`.
 
 ## Installation
 
@@ -69,7 +67,7 @@ uv venv
 uv pip install -r requirements.txt
 ```
 
-### Simulator
+### Simulator / Tobii Client
 
 ```powershell
 cd simulator
@@ -89,35 +87,44 @@ uv pip install -r requirements.txt
 
 ## Quick Start
 
-### 1. Start the Viewer
+### Simulated Gaze (No Eye Tracker Needed)
 
+**Terminal 1 — Viewer:**
 ```powershell
 cd viewer
 .\.venv\Scripts\activate
 python app.py "C:\slides\CMU-1.svs"
 ```
+Open browser to http://127.0.0.1:8000
 
-Open browser to **http://127.0.0.1:8000**
-
-### 2. Start the Simulator
-
+**Terminal 2 — Simulator:**
 ```powershell
 cd simulator
 .\.venv\Scripts\activate
-python simulator.py --mode manual --sigma 17
+python simulator.py --source simulator --mode manual --sigma 17
 ```
 
-### 3. Use It
+Ctrl+Click on tissue in the browser. Red dots appear with Gaussian scatter.
 
-- **Pan:** click + drag
-- **Zoom:** scroll wheel
-- **Place fixation target:** Ctrl + click on tissue
-- Red dots appear with Gaussian scatter around your click
-- Gray dots show saccade path between fixations
+### Real Eye Tracker (Tobii Pro)
 
-### 4. Analyze
+**Step 1 — Test tracker:**
+```powershell
+cd simulator
+.\.venv\Scripts\activate
+python tobii_calibration.py
+```
 
-After stopping the simulator (Ctrl+C), analyze the session:
+**Step 2 — Start viewer** (same as above), then press **F11** for fullscreen.
+
+**Step 3 — Start with Tobii:**
+```powershell
+python simulator.py --source tobii --screen-width 1920 --screen-height 1080 --browser-offset-x 0 --browser-offset-y 0
+```
+
+Look at the slide — red dots appear where your eyes fixate.
+
+### Analyze a Session
 
 ```powershell
 cd analyzer
@@ -127,8 +134,6 @@ python analyze_session.py ^
     C:\slides\CMU-1.svs ^
     --tile-size 512
 ```
-
-Outputs: `dwell_map.csv`, `heatmap.png`, `session_summary.txt`
 
 ## Viewer Controls
 
@@ -140,153 +145,109 @@ Outputs: `dwell_map.csv`, `heatmap.png`, `session_summary.txt`
 | Toggle gaze render  | G key (all → latest → off)  |
 | Clear gaze dots     | C key                        |
 
-### HUD (top-left overlay)
+### HUD (Top-Left Overlay)
 
-| Field          | Description                                          |
-|----------------|------------------------------------------------------|
-| File           | Loaded slide filename                                |
-| Magnification  | Effective optical magnification at current zoom      |
-| Cursor WSI     | Level-0 slide coordinates under mouse cursor         |
-| DZ Level       | Current Deep Zoom pyramid level being displayed      |
-| Viewport       | Bounding box of visible region in WSI coordinates    |
-| Gaze           | Current gaze render mode                             |
-| WS             | WebSocket connection status                          |
+| Field          | Description                                     |
+|----------------|-------------------------------------------------|
+| File           | Loaded slide filename                           |
+| Magnification  | Effective magnification at current zoom         |
+| Cursor WSI     | Level-0 coordinates under mouse                |
+| DZ Level       | Current Deep Zoom pyramid level                 |
+| Viewport       | Visible region in WSI coordinates               |
+| Gaze           | Render mode (all / latest / off)                |
+| WS             | WebSocket status                                |
 
-## Simulator
+## Gaze Source Options
 
-### Modes
+### Simulator
 
-| Mode     | Behavior                                            |
-|----------|-----------------------------------------------------|
-| `manual` | Waits for Ctrl+Click. Each click = fixation target. |
-| `auto`   | Random fixations within current viewport.           |
+| Flag               | Default  | Description                    |
+|--------------------|----------|--------------------------------|
+| `--mode`           | manual   | `manual` or `auto`             |
+| `--sigma`          | 17.0     | Gaussian noise (screen pixels) |
+| `--rate`           | 120      | Sampling rate Hz               |
+| `--fix-min`        | 200      | Min fixation duration ms       |
+| `--fix-max`        | 500      | Max fixation duration ms       |
+| `--auto-interval`  | 0.8      | Seconds between auto fixations |
 
-### Options
+### Tobii
 
-| Flag               | Default                 | Description                          |
-|--------------------|-------------------------|--------------------------------------|
-| `--viewer-url`     | `http://127.0.0.1:8000` | Viewer server URL                    |
-| `--mode`           | `manual`                | `manual` or `auto`                   |
-| `--sigma`          | `17.0`                  | Gaussian noise in screen pixels      |
-| `--rate`           | `120`                   | Sampling rate in Hz                  |
-| `--fix-min`        | `200`                   | Minimum fixation duration (ms)       |
-| `--fix-max`        | `500`                   | Maximum fixation duration (ms)       |
-| `--auto-interval`  | `0.8`                   | Seconds between auto fixations       |
-| `--log-dir`        | `./logs`                | Output directory for session files   |
+| Flag                  | Default  | Description                        |
+|-----------------------|----------|------------------------------------|
+| `--screen-width`      | 1920     | Monitor resolution width           |
+| `--screen-height`     | 1080     | Monitor resolution height          |
+| `--browser-offset-x`  | 0        | Screen X offset to viewer canvas   |
+| `--browser-offset-y`  | 0        | Screen Y offset to viewer canvas   |
+| `--tobii-frequency`   | 120      | Tracker output frequency Hz        |
 
-### Zoom-Adaptive Sigma
-
-Sigma (Gaussian noise) is defined in **screen pixels**, not WSI pixels.
-This means the visual scatter on screen stays constant (~17px ≈ 0.5° visual
-angle) regardless of zoom level.
-
-```
-σ_wsi = σ_screen × (viewport_wsi_width / container_screen_width)
-```
-
-At high magnification: tight cluster in tissue space.
-At low magnification: wider cluster in tissue space.
-On screen: always the same visual size.
+**Browser offset:** Use `(0, 0)` with fullscreen browser (F11). For windowed
+mode, estimate pixels from screen edge to where the slide canvas begins.
 
 ## Coordinate System
 
 ```
-SCREEN SPACE                    Physical monitor pixels (Tobii output)
+TOBII NORMALIZED (0.0–1.0)     Eye tracker output
     │
-    ├── subtract viewer window offset
+    ├── × screen resolution
     ▼
-VIEWER CANVAS SPACE             CSS pixels in browser viewport
+SCREEN PIXELS                   Physical monitor pixels
     │
-    ├── OpenSeadragon inverse viewport transform
+    ├── − browser offset
     ▼
-WSI LEVEL-0 SPACE               Slide pixels at scanned resolution
+VIEWER CANVAS PIXELS            CSS pixels in browser
     │
-    ├── multiply by mpp (microns per pixel)
+    ├── OpenSeadragon viewport inverse
     ▼
-PHYSICAL SPACE                  Microns on tissue
+WSI LEVEL-0 PIXELS              Slide pixels at scan resolution
+    │
+    ├── × mpp (microns per pixel)
+    ▼
+PHYSICAL (microns)              Actual tissue coordinates
 ```
 
-All logged coordinates are in **WSI level-0 space** — zoom-independent,
-directly mapping to tissue locations.
+All logged coordinates are in **WSI level-0 space**.
 
 ## Gaze Simulation Model
 
-### Fixation
+**Fixation:** N samples from `Normal(target, σ_wsi)` where
+`σ_wsi = σ_screen × (viewport_width / canvas_width)`.
+Duration: 200–500 ms.
 
-```
-duration ~ Uniform(200, 500) ms
-N_samples = duration / 1000 × sampling_rate
+**Saccade:** Smooth ease-in-out interpolation. Duration: 30–80 ms.
+Marked `is_saccade: true` in logs.
 
-For each sample:
-    gaze_x = target_x + Normal(0, σ_wsi)
-    gaze_y = target_y + Normal(0, σ_wsi)
-```
+**Zoom-adaptive sigma:** Visual scatter on screen stays constant (~17px ≈
+0.5° visual angle) regardless of zoom. At high mag, σ_wsi is small.
+At low mag, σ_wsi is large. Screen appearance is identical.
 
-### Saccade
+## Log Format (JSONL)
 
-Smooth ease-in-out interpolation between fixation targets:
-
-```
-t_smooth = t² × (3 - 2t)
-position = lerp(start, end, t_smooth)
-```
-
-Saccade duration: 30–80ms. Marked `is_saccade: true` in logs.
-
-## Log File Format (JSONL)
-
-One JSON object per line. Short keys to keep file size manageable at 120 Hz.
-
-**Header (line 1):**
+**Header:**
 ```json
-{
-  "type": "session_header",
-  "slide": "CMU-1.svs",
-  "slide_dimensions": [46000, 32914],
-  "objective_power": 20.0,
-  "mpp_x": 0.499,
-  "start_time": "2025-01-08T14:30:22",
-  "simulator_config": {"mode": "manual", "sigma_screen": 17.0, "sampling_rate": 120}
-}
+{"type":"session_header","slide":"CMU-1.svs","slide_dimensions":[46000,32914],"objective_power":20.0,"mpp_x":0.499,"start_time":"2025-01-08T14:30:22","simulator_config":{"source":"tobii","frequency":120}}
 ```
 
-**Gaze samples:**
+**Gaze:**
 ```json
 {"type":"gaze","t":123.4,"wx":51234.2,"wy":37891.7,"sac":false,"fid":0,"src":"simulator"}
 ```
 
-| Key   | Meaning                                    |
-|-------|--------------------------------------------|
-| `t`   | Milliseconds since session start           |
-| `wx`  | WSI level-0 x coordinate                   |
-| `wy`  | WSI level-0 y coordinate                   |
-| `sac` | True during saccade                        |
-| `fid` | Fixation ID (-1 during saccade)            |
-| `src` | Source: `"simulator"` or `"tobii"`         |
+| Key  | Meaning                          |
+|------|----------------------------------|
+| `t`  | ms since session start           |
+| `wx` | WSI level-0 x                    |
+| `wy` | WSI level-0 y                    |
+| `sac`| True during saccade              |
+| `fid`| Fixation ID (-1 for saccade/tobii)|
+| `src`| `"simulator"` or `"tobii"`       |
 
-## Analyzer
+## Analyzer Output
 
-### Usage
-
-```powershell
-python analyze_session.py <session.jsonl> <slide.svs> [OPTIONS]
-```
-
-### Options
-
-| Flag               | Default  | Description                               |
-|--------------------|----------|-------------------------------------------|
-| `--tile-size`      | `256`    | Tile size in WSI level-0 pixels           |
-| `--output-dir`     | `./output` | Output directory                        |
-| `--thumbnail-size` | `2048`   | Max thumbnail dimension for heatmap       |
-
-### Output
-
-| File                  | Content                                    |
-|-----------------------|--------------------------------------------|
-| `dwell_map.csv`       | Per-tile: col, row, sample_count, fixations |
-| `heatmap.png`         | Visual overlay on slide thumbnail           |
-| `session_summary.txt` | Human-readable session statistics           |
+| File                  | Content                              |
+|-----------------------|--------------------------------------|
+| `dwell_map.csv`       | Per-tile dwell times and fixations   |
+| `heatmap.png`         | Visual overlay on slide thumbnail    |
+| `session_summary.txt` | Human-readable statistics            |
 
 ## Project Structure
 
@@ -295,58 +256,35 @@ wsi_platform/
 ├── .gitignore
 ├── LICENSE
 ├── README.md
-│
-├── viewer/                     # App 1: WSI Viewer
+├── viewer/
 │   ├── requirements.txt
-│   ├── app.py                  # FastAPI server + WebSocket hub
-│   ├── wsi_reader.py           # OpenSlide wrapper + tile generation
+│   ├── app.py
+│   ├── wsi_reader.py
 │   └── static/
 │       ├── index.html
-│       ├── viewer.js           # OpenSeadragon + HUD + gaze overlay
-│       └── style.css
-│
-├── simulator/                  # App 2: Gaze Source
+│       ├── style.css
+│       └── viewer.js
+├── simulator/
 │   ├── requirements.txt
-│   ├── gaze_source.py          # GazeSource ABC + SimulatedGazeSource
-│   ├── gaze_logger.py          # JSONL session logger
-│   └── simulator.py            # CLI entry point
-│
-└── analyzer/                   # App 3: Post-hoc Analysis
+│   ├── simulator.py
+│   ├── gaze_source.py
+│   ├── gaze_logger.py
+│   ├── tobii_source.py
+│   └── tobii_calibration.py
+└── analyzer/
     ├── requirements.txt
-    └── analyze_session.py      # Dwell mapping + heatmap
-```
-
-## API Reference
-
-### HTTP Endpoints
-
-| Endpoint                          | Method | Response            |
-|-----------------------------------|--------|---------------------|
-| `/`                               | GET    | Viewer HTML page    |
-| `/slide/info`                     | GET    | Slide metadata JSON |
-| `/tiles/{level}/{col}/{row}.jpeg` | GET    | DZI tile image      |
-| `/ws`                             | WS     | Bidirectional relay  |
-
-### WebSocket Messages
-
-**Browser → Server:**
-```json
-{"type": "viewport_update", "bounds_wsi": {"x_min":0,"y_min":0,"x_max":46000,"y_max":32914}, "container_width": 1920}
-{"type": "click", "wsi_x": 31752, "wsi_y": 10731}
-```
-
-**Simulator → Server → Browser:**
-```json
-{"type": "gaze_point", "wsi_x": 31755.3, "wsi_y": 10728.9, "is_saccade": false, "fixation_id": 0}
+    └── analyze_session.py
 ```
 
 ## Troubleshooting
 
-| Problem                              | Solution                                                  |
-|--------------------------------------|-----------------------------------------------------------|
-| `WS: disconnected` in viewer HUD    | `uv pip install websockets` in viewer venv, restart       |
-| DLL error on `import openslide`      | `uv pip install openslide-bin` or add OpenSlide to PATH   |
-| Gray squares (tiles not loading)     | Check terminal for errors. Verify slide path.             |
-| No dots on Ctrl+Click               | Check simulator terminal. Confirm WS connected.           |
-| `ModuleNotFoundError: websockets.sync` | `uv pip install "websockets>=11.0"`                     |
-| Heatmap is blank                     | Check that JSONL has gaze records. Run with `--tile-size 512`. |
+| Problem | Solution |
+|---------|----------|
+| `WS: disconnected` | `uv pip install websockets` in viewer venv |
+| DLL error on openslide | `uv pip install openslide-bin` |
+| No Tobii tracker found | Check USB, open Eye Tracker Manager |
+| Low Tobii validity | Run calibration in Eye Tracker Manager |
+| Gaze offset from expected position | Check `--browser-offset-x/y`, use F11 fullscreen |
+| `tobii-research` won't install | Need Python 3.10+, check with `python --version` |
+| Dots too spread / too tight | Adjust `--sigma` (screen pixels, default 17) |
+| Heatmap blank | Verify JSONL has gaze records, try `--tile-size 512` |
