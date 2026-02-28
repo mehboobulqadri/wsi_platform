@@ -134,6 +134,7 @@ python analyze_session.py ^
     C:\slides\CMU-1.svs ^
     --tile-size 512
 ```
+For Powershell use ` instead of ^
 
 ## Viewer Controls
 
