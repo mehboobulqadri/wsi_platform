@@ -7,14 +7,6 @@ eye-tracking experiments.
 Supports simulated gaze (for development) and Tobii Pro eye trackers
 (for real experiments) through a swappable gaze source interface.
 
-## Status
-
-- [x] Phase 1 — WSI tile server + browser viewer
-- [x] Phase 2 — WebSocket relay + click event forwarding
-- [x] Phase 3 — Gaze simulator (fixation-saccade model + Gaussian noise)
-- [x] Phase 4 — Per-tile dwell-time analysis + heatmap generation
-- [ ] Phase 5 — Tobii Pro eye tracker integration
-
 ## Architecture
 
 Two standalone applications communicating over WebSocket:
