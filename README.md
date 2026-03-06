@@ -37,8 +37,8 @@ flag — zero viewer changes.
 
 ## Prerequisites
 
-- Python 3.9+
-- Windows (tested), macOS/Linux should work
+- Python 3.10+
+- Windows, macOS/Linux should work
 - [uv](https://github.com/astral-sh/uv) package manager (recommended) or pip
 
 ### Get a Test Slide
